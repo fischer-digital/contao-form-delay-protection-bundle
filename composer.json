@@ -4,10 +4,10 @@
     "keywords": ["contao", "spam", "protection", "form", "delay", "hmac", "security"],
     "type": "contao-bundle",
     "license": "MIT",
-    "homepage": "https://github.com/fischer-digital/tbo-contao-form-delay-protection-bundle",
+    "homepage": "https://github.com/fischer-digital/contao-form-delay-protection-bundle",
     "support": {
-        "issues": "https://github.com/fischer-digital/tbo-contao-form-delay-protection-bundle/issues",
-        "source": "https://github.com/fischer-digital/tbo-contao-form-delay-protection-bundle"
+        "issues": "https://github.com/fischer-digital/contao-form-delay-protection-bundle/issues",
+        "source": "https://github.com/fischer-digital/contao-form-delay-protection-bundle"
     },
     "authors": [
         {

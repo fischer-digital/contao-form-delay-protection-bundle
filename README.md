@@ -25,7 +25,7 @@ composer require fischerdigital/contao-form-delay-protection-bundle
 
 ### Manual installation
 
-Clone or download this repository into your `vendor/tbo/contao-form-delay-protection-bundle` directory and add a path repository to your `composer.json`:
+Clone or download this repository into your `vendor/fischerdigital/contao-form-delay-protection-bundle` directory and add a path repository to your `composer.json`:
 
 ```json
 "repositories": [
