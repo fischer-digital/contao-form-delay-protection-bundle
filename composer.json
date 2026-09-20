@@ -1,5 +1,5 @@
 {
-    "name": "tbo/contao-form-delay-protection-bundle",
+    "name": "fischerdigital/contao-form-delay-protection-bundle",
     "description": "Time-based spam protection for Contao forms using HMAC-signed timestamps",
     "keywords": ["contao", "spam", "protection", "form", "delay", "hmac", "security"],
     "type": "contao-bundle",
