@@ -20,7 +20,7 @@ This approach is **completely session-independent** — it works reliably with H
 ### Via Composer (recommended)
 
 ```bash
-composer require tbo/contao-form-delay-protection-bundle
+composer require fischerdigital/contao-form-delay-protection-bundle
 ```
 
 ### Manual installation
