@@ -6,6 +6,7 @@ namespace Tbo\FormDelayProtection\EventListener;
 
 use Contao\CoreBundle\DependencyInjection\Attribute\AsHook;
 use Contao\Form;
+use Contao\System;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\RequestStack;
 
@@ -89,6 +90,9 @@ class FormSpamProtectionListener
         if (!$this->isTimeProtectionEnabled($form)) {
             return;
         }
+
+        // Ensure our bundle's language file is loaded for $GLOBALS['TL_LANG']['tl_form']
+        System::loadLanguageFile('tl_form');
 
         $request = $this->requestStack->getCurrentRequest();
 
