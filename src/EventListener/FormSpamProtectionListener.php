@@ -97,9 +97,10 @@ class FormSpamProtectionListener
         }
 
         $formId = $form->formID ? 'auto_' . $form->formID : 'auto_form_' . $form->id;
-        $token = $request->request->get('_form_load_token', '');
+        $rawToken = $request->request->get('_form_load_token');
 
-        if (empty($token)) {
+        // Ensure the token is a string (not an array from _form_load_token[])
+        if (!is_string($rawToken) || $rawToken === '') {
             $form->addError(
                 $this->translate(
                     'form_spam_no_timestamp',
@@ -110,8 +111,33 @@ class FormSpamProtectionListener
             return;
         }
 
+        // Reject oversized tokens (DoS prevention)
+        // Format: "10-digit-timestamp.64-hex-chars" = max ~80 chars
+        if (\strlen($rawToken) > 200) {
+            $form->addError(
+                $this->translate(
+                    'form_spam_invalid_token',
+                    'Invalid form token. Please reload the page and try again.'
+                )
+            );
+
+            return;
+        }
+
+        // Reject tokens containing null bytes or non-printable characters
+        if (str_contains($rawToken, "\0") || preg_match('/[^\x20-\x7E]/', $rawToken)) {
+            $form->addError(
+                $this->translate(
+                    'form_spam_invalid_token',
+                    'Invalid form token. Please reload the page and try again.'
+                )
+            );
+
+            return;
+        }
+
         // Split token: timestamp.hmac
-        $parts = explode('.', $token, 2);
+        $parts = explode('.', $rawToken, 2);
 
         if (count($parts) !== 2 || !ctype_digit($parts[0])) {
             $form->addError(
@@ -126,7 +152,33 @@ class FormSpamProtectionListener
 
         [$timestamp, $submittedHmac] = $parts;
 
-        // Verify HMAC signature
+        // Validate HMAC format: SHA-256 produces exactly 64 lowercase hex characters
+        if (preg_match('/^[0-9a-f]{64}$/', $submittedHmac) !== 1) {
+            $form->addError(
+                $this->translate(
+                    'form_spam_invalid_token',
+                    'Invalid form token. Please reload the page and try again.'
+                )
+            );
+
+            return;
+        }
+
+        // Validate timestamp is within a reasonable range
+        $ts = (int) $timestamp;
+
+        if ($ts < 0 || $ts > time() + 300) {
+            $form->addError(
+                $this->translate(
+                    'form_spam_invalid_token',
+                    'Invalid form token. Please reload the page and try again.'
+                )
+            );
+
+            return;
+        }
+
+        // Verify HMAC signature (timing-safe comparison)
         if (!hash_equals($this->generateHmac($timestamp, $formId), $submittedHmac)) {
             $form->addError(
                 $this->translate(
@@ -139,7 +191,7 @@ class FormSpamProtectionListener
         }
 
         // Calculate elapsed time
-        $elapsed = time() - (int) $timestamp;
+        $elapsed = time() - $ts;
         $minLoadTime = (int) ($form->minLoadTime ?: 5);
 
         if ($elapsed < $minLoadTime) {
