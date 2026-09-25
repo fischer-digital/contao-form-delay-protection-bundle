@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tbo\FormDelayProtection\EventListener;
 
 use Contao\CoreBundle\DependencyInjection\Attribute\AsHook;
+use Contao\CoreBundle\Monolog\ContaoContext;
 use Contao\Form;
 use Contao\System;
 use Psr\Log\LoggerInterface;
@@ -45,6 +46,8 @@ class FormSpamProtectionListener
     public function __construct(
         private readonly RequestStack $requestStack,
         private readonly LoggerInterface $logger,
+        #[Autowire(service: 'monolog.logger.contao.forms')]
+        private readonly LoggerInterface $systemLogger,
         #[Autowire('%kernel.secret%')]
         private readonly string $secret,
     ) {
@@ -394,6 +397,9 @@ class FormSpamProtectionListener
      *
      * The success message/redirect is shown as normal, but no email is sent,
      * no data is stored in the database and nothing is written to the session.
+     *
+     * The drop is written to the Contao system log (tl_log, visible in the
+     * back end) and to the monolog log.
      */
     private function suppressProcessing(Form $form, string $reason): void
     {
@@ -401,12 +407,20 @@ class FormSpamProtectionListener
         $form->storeValues = false;
         $form->storeSession = false;
 
-        $this->logger->warning(sprintf(
+        $message = sprintf(
             'Form "%s" (ID %s): submission silently dropped (reason: %s), no data was processed.',
             (string) $form->title,
             (string) $form->id,
             $reason
-        ));
+        );
+
+        // Contao system log (tl_log, shown in the back end)
+        $this->systemLogger->warning($message, [
+            'contao' => new ContaoContext(__METHOD__, ContaoContext::FORMS),
+        ]);
+
+        // Monolog file log
+        $this->logger->warning($message);
     }
 
     /**

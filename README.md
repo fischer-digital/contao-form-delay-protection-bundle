@@ -88,7 +88,7 @@ If **Silently drop spam** is enabled, the following submissions show the regular
 - submissions matching one of the [spam patterns](#spam-patterns)
 - submissions arriving **less than 3 seconds** after the form was rendered (a fixed hard floor, independent of the configured minimum time)
 
-"Without processing" means: **no email is sent, no data is stored in the target table and nothing is written to the session**. Each drop is logged as a warning, e.g. `Form "Contact" (ID 4): submission silently dropped (reason: regex_spam), no data was processed.`
+"Without processing" means: **no email is sent, no data is stored in the target table and nothing is written to the session**. Each drop is written to the Contao system log (back end → System-Protokoll, action `FORMS`) and to the monolog log, e.g. `Form "Contact" (ID 4): submission silently dropped (reason: regex_spam), no data was processed.`
 
 Note: third-party `processFormData` hooks still run (Contao offers no way to skip them), but the core sending/storing mechanisms are safely disabled.
 
