@@ -1,7 +1,7 @@
 {
     "name": "fischerdigital/contao-form-delay-protection-bundle",
-    "description": "Time-based spam protection for Contao forms using HMAC-signed timestamps",
-    "keywords": ["contao", "spam", "protection", "form", "delay", "hmac", "security"],
+    "description": "Time-based and pattern-based spam protection for Contao forms using HMAC-signed timestamps, regex spam patterns and silent drop",
+    "keywords": ["contao", "spam", "protection", "form", "delay", "hmac", "security", "regex"],
     "type": "contao-bundle",
     "license": "MIT",
     "homepage": "https://github.com/fischer-digital/contao-form-delay-protection-bundle",
@@ -18,7 +18,7 @@
     ],
     "require": {
         "php": "^8.1",
-        "contao/core-bundle": "^5.0"
+        "contao/core-bundle": "^5.7"
     },
     "require-dev": {
         "contao/manager-plugin": "^2.6"

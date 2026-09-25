@@ -7,24 +7,44 @@ namespace Tbo\FormDelayProtection\EventListener;
 use Contao\CoreBundle\DependencyInjection\Attribute\AsHook;
 use Contao\Form;
 use Contao\System;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\RequestStack;
 
 /**
- * Time-based spam protection for Contao forms.
+ * Time-based and pattern-based spam protection for Contao forms.
  *
+ * Time-based protection:
  * Injects an HMAC-signed hidden field with a server-side timestamp when
  * the form is rendered. On submission, the signature is verified and the
  * elapsed time is calculated. If the minimum delay has not passed, an
  * error is added and the form is NOT processed.
+ *
+ * Pattern-based protection:
+ * Checks the submitted values for typical spam patterns (consonant
+ * gibberish, case jumble, Gmail dot trick).
+ *
+ * Silent drop:
+ * Both checks can optionally drop a submission silently: the success
+ * message is shown as normal, but no email is sent, no data is stored and
+ * nothing is written to the session.
  *
  * Advantage: Completely session-independent – works with HTTP caching,
  * AJAX and without session cookies.
  */
 class FormSpamProtectionListener
 {
+    /**
+     * Hard time floor for the silent drop (in seconds).
+     *
+     * Submissions faster than this are considered definite bot traffic and
+     * are silently dropped – independent of the configured minimum time.
+     */
+    private const SILENT_DROP_MAX_SECONDS = 3;
+
     public function __construct(
         private readonly RequestStack $requestStack,
+        private readonly LoggerInterface $logger,
         #[Autowire('%kernel.secret%')]
         private readonly string $secret,
     ) {
@@ -87,7 +107,10 @@ class FormSpamProtectionListener
         Form $form,
         array &$arrFiles,
     ): void {
-        if (!$this->isTimeProtectionEnabled($form)) {
+        $timeProtectionEnabled = $this->isTimeProtectionEnabled($form);
+        $regexProtectionEnabled = $this->isRegexProtectionEnabled($form);
+
+        if (!$timeProtectionEnabled && !$regexProtectionEnabled) {
             return;
         }
 
@@ -97,6 +120,30 @@ class FormSpamProtectionListener
         $request = $this->requestStack->getCurrentRequest();
 
         if (null === $request) {
+            return;
+        }
+
+        // Pattern-based spam checks (do not require the token, so they also
+        // work when the time-based protection is disabled)
+        if ($regexProtectionEnabled && $this->matchesRegexSpam($arrSubmitted, $arrFields, $form)) {
+            if ($this->isSilentDropEnabled($form)) {
+                $this->suppressProcessing($form, 'regex_spam');
+
+                return;
+            }
+
+            $form->addError(
+                $this->translate(
+                    'form_spam_suspicious_content',
+                    'The form could not be processed. Please check your entries and try again.'
+                )
+            );
+
+            return;
+        }
+
+        // From here on the time-based check requires the token
+        if (!$timeProtectionEnabled) {
             return;
         }
 
@@ -199,6 +246,14 @@ class FormSpamProtectionListener
         $minLoadTime = (int) ($form->minLoadTime ?: 5);
 
         if ($elapsed < $minLoadTime) {
+            // Hard floor: submissions faster than 3 seconds are definite bot
+            // traffic – silently drop them instead of showing an error
+            if ($this->isSilentDropEnabled($form) && $elapsed < self::SILENT_DROP_MAX_SECONDS) {
+                $this->suppressProcessing($form, 'submitted_too_fast');
+
+                return;
+            }
+
             $form->addError(
                 sprintf(
                     $this->translate(
@@ -209,6 +264,137 @@ class FormSpamProtectionListener
                 )
             );
         }
+    }
+
+    /**
+     * Checks whether pattern-based spam protection is enabled for this form.
+     */
+    private function isRegexProtectionEnabled(Form $form): bool
+    {
+        return !empty($form->enableRegexSpamProtection);
+    }
+
+    /**
+     * Checks whether detected spam should be silently dropped.
+     */
+    private function isSilentDropEnabled(Form $form): bool
+    {
+        return !empty($form->enableSilentDrop);
+    }
+
+    /**
+     * Matches the submitted values against the spam patterns.
+     *
+     * 1. Consonant gibberish (5+ consecutive consonants) – single-line text
+     *    fields only (name/street-like inputs), as German compound words in
+     *    free text can contain long consonant clusters ("selbstständig").
+     * 2. Case jumble (e.g. "aggZJZAK") – all textual values.
+     * 3. Gmail dot trick – email-like values.
+     *
+     * Fields listed in the "regexSpamExcludeFields" option (comma-separated
+     * field names) are skipped entirely.
+     */
+    private function matchesRegexSpam(array $arrSubmitted, array $arrFields, Form $form): bool
+    {
+        $excludedFields = $this->getRegexExcludedFields($form);
+
+        foreach ($arrSubmitted as $name => $value) {
+            if (in_array(strtolower((string) $name), $excludedFields, true)) {
+                continue;
+            }
+
+            $type = $arrFields[$name]->type ?? null;
+
+            foreach ($this->flattenValues($value) as $string) {
+                // 1. Consonant gibberish (e.g. "xjkrtw")
+                if ('text' === $type && preg_match('/[b-df-hj-np-tv-z]{5,}/i', $string)) {
+                    return true;
+                }
+
+                // 2. Case jumble in the middle of a word (e.g. "aggZJZAK")
+                if (preg_match('/[a-z]{2,}[A-Z]{2,}/', $string)) {
+                    return true;
+                }
+
+                // 3. Gmail dot trick (3+ dots in the local part of a gmail.com address)
+                if (('email' === $type || str_contains($string, '@')) && $this->isGmailDotTrick($string)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Recursively flattens a submitted value into a list of non-empty strings.
+     *
+     * @return list<string>
+     */
+    private function flattenValues(mixed $value): array
+    {
+        if (is_array($value)) {
+            $result = [];
+
+            foreach ($value as $item) {
+                array_push($result, ...$this->flattenValues($item));
+            }
+
+            return $result;
+        }
+
+        return is_string($value) && '' !== $value ? [$value] : [];
+    }
+
+    /**
+     * Returns the lowercase field names that are excluded from the regex checks.
+     *
+     * @return list<string>
+     */
+    private function getRegexExcludedFields(Form $form): array
+    {
+        $names = explode(',', (string) ($form->regexSpamExcludeFields ?? ''));
+
+        return array_values(array_filter(array_map(
+            static fn (string $name): string => strtolower(trim($name)),
+            $names
+        )));
+    }
+
+    /**
+     * Detects the Gmail dot trick (3+ dots in the local part of a gmail.com address).
+     */
+    private function isGmailDotTrick(string $value): bool
+    {
+        $value = trim($value);
+
+        if (!str_ends_with(strtolower($value), '@gmail.com')) {
+            return false;
+        }
+
+        $localPart = explode('@', $value)[0];
+
+        return substr_count($localPart, '.') >= 3;
+    }
+
+    /**
+     * Silently drops the current submission.
+     *
+     * The success message/redirect is shown as normal, but no email is sent,
+     * no data is stored in the database and nothing is written to the session.
+     */
+    private function suppressProcessing(Form $form, string $reason): void
+    {
+        $form->sendViaEmail = false;
+        $form->storeValues = false;
+        $form->storeSession = false;
+
+        $this->logger->warning(sprintf(
+            'Form "%s" (ID %s): submission silently dropped (reason: %s), no data was processed.',
+            (string) $form->title,
+            (string) $form->id,
+            $reason
+        ));
     }
 
     /**

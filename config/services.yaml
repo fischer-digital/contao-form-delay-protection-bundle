@@ -4,3 +4,5 @@ services:
         autoconfigure: true
 
     Tbo\FormDelayProtection\EventListener\FormSpamProtectionListener: ~
+
+    Tbo\FormDelayProtection\Migration\LegacyColumnsToVirtualFieldsMigration: ~
