@@ -71,12 +71,13 @@ The regex spam protection checks the submitted values against three patterns:
 | # | Pattern | Example | Applied to |
 |---|---------|---------|------------|
 | 1 | Consonant gibberish: 5 or more consecutive consonants (`/[b-df-hj-np-tv-z]{5,}/i`) | `xjkrtw` | Single-line text fields only (name/street-like inputs)¹ |
-| 2 | Case jumble: unusual upper/lowercase mixing within a word (`/[a-z]{2,}[A-Z]{2,}/`) | `aggZJZAK` | All textual values (including textareas)² |
-| 3 | Gmail dot trick: 3 or more dots in the local part of a `@gmail.com` address | `j.o.h.n.doe@gmail.com` | Email-like values² |
+| 2 | Repeated letters: 3 or more identical consecutive letters (`/(.)\1{2,}/i`) | `rrrttzr` | Single-line text fields only¹ |
+| 3 | Case jumble: unusual upper/lowercase mixing within a word (`/[a-z]{2,}[A-Z]{2,}/`) | `aggZJZAK` | All textual values (including textareas)² |
+| 4 | Dot trick: 3 or more dots in the local part of an email address (any domain) | `j.o.h.n.doe@gmail.com` | Email-like values |
 
-¹ Pattern 1 is deliberately **not** applied to free text: German compound words can contain long consonant clusters ("selbstständig", "Herbstschmuck") and would cause false positives.
+¹ Patterns 1 and 2 are deliberately **not** applied to free text: German compound words can contain long consonant clusters ("selbstständig", "Herbstschmuck") and casual writing often repeats letters ("Jaaa", "sooo").
 
-² Pattern 2 can also match legitimate mixed-case terms such as "OpenAI" or "PowerBI" (lowercase run followed by an uppercase run). Pattern 3 checks whether the value **ends with** `@gmail.com` (as in the original spam signatures).
+² Pattern 3 can also match legitimate mixed-case terms such as "OpenAI" or "PowerBI" (lowercase run followed by an uppercase run).
 
 Individual fields can be excluded from all regex checks via the **Exceptions (field names)** option (comma-separated list of field names, e.g. `message,bemerkung`).
 

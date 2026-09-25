@@ -22,7 +22,7 @@ use Symfony\Component\HttpFoundation\RequestStack;
  *
  * Pattern-based protection:
  * Checks the submitted values for typical spam patterns (consonant
- * gibberish, case jumble, Gmail dot trick).
+ * gibberish, repeated characters, case jumble, dot trick).
  *
  * Silent drop:
  * Both checks can optionally drop a submission silently: the success
@@ -288,8 +288,11 @@ class FormSpamProtectionListener
      * 1. Consonant gibberish (5+ consecutive consonants) – single-line text
      *    fields only (name/street-like inputs), as German compound words in
      *    free text can contain long consonant clusters ("selbstständig").
-     * 2. Case jumble (e.g. "aggZJZAK") – all textual values.
-     * 3. Gmail dot trick – email-like values.
+     * 2. Repeated character gibberish (3+ identical consecutive letters,
+     *    e.g. "rrrttzr") – single-line text fields only.
+     * 3. Case jumble (e.g. "aggZJZAK") – all textual values.
+     * 4. Dot trick (3+ dots in the local part of an email address) –
+     *    email-like values.
      *
      * Fields listed in the "regexSpamExcludeFields" option (comma-separated
      * field names) are skipped entirely.
@@ -306,18 +309,23 @@ class FormSpamProtectionListener
             $type = $arrFields[$name]->type ?? null;
 
             foreach ($this->flattenValues($value) as $string) {
-                // 1. Consonant gibberish (e.g. "xjkrtw")
+                // 1. Consonant gibberish (e.g. "xjkrtw") - single-line text fields
                 if ('text' === $type && preg_match('/[b-df-hj-np-tv-z]{5,}/i', $string)) {
                     return true;
                 }
 
-                // 2. Case jumble in the middle of a word (e.g. "aggZJZAK")
+                // 2. Repeated character gibberish (e.g. "rrrttzr") - single-line text fields
+                if ('text' === $type && preg_match('/(.)\1{2,}/i', $string)) {
+                    return true;
+                }
+
+                // 3. Case jumble in the middle of a word (e.g. "aggZJZAK")
                 if (preg_match('/[a-z]{2,}[A-Z]{2,}/', $string)) {
                     return true;
                 }
 
-                // 3. Gmail dot trick (3+ dots in the local part of a gmail.com address)
-                if (('email' === $type || str_contains($string, '@')) && $this->isGmailDotTrick($string)) {
+                // 4. Dot trick (3+ dots in the local part of an email address)
+                if (('email' === $type || str_contains($string, '@')) && $this->isDotTrick($string)) {
                     return true;
                 }
             }
@@ -362,19 +370,23 @@ class FormSpamProtectionListener
     }
 
     /**
-     * Detects the Gmail dot trick (3+ dots in the local part of a gmail.com address).
+     * Detects the dot trick (3+ dots in the local part of an email address).
+     *
+     * All email addresses found in the value are checked, regardless of domain.
      */
-    private function isGmailDotTrick(string $value): bool
+    private function isDotTrick(string $value): bool
     {
-        $value = trim($value);
-
-        if (!str_ends_with(strtolower($value), '@gmail.com')) {
+        if (!preg_match_all('/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+/', $value, $matches)) {
             return false;
         }
 
-        $localPart = explode('@', $value)[0];
+        foreach ($matches[0] as $address) {
+            if (substr_count((string) strstr($address, '@', true), '.') >= 3) {
+                return true;
+            }
+        }
 
-        return substr_count($localPart, '.') >= 3;
+        return false;
     }
 
     /**
