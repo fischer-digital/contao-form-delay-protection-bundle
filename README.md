@@ -90,9 +90,10 @@ Silent drop shows the regular success message (or redirect) but drops the submis
 - **Silent Drop Regex** (checkbox): submissions matching one of the [spam patterns](#spam-patterns) are dropped silently instead of showing an error message.
 - **Silent Drop Time** (select, part of the time-based protection): submissions arriving faster than the selected threshold (disabled / less than 3 / 5 / 10 seconds) are dropped silently. Keep this threshold below the **Minimum time** — the minimum time is the threshold that shows an **error message** ("submitted too quickly") to the sender.
 
-"Without processing" means: **no email is sent, no data is stored in the target table and nothing is written to the session**. Every drop is written to the monolog log; with the **Log silent drop messages to the system log** checkbox it is also written to the Contao system log (back end → System-Protokoll, action `FORMS`) — including the submitted form data as JSON (uploads are recorded with their original file names). The `reason` in the entry is either `regex_spam` or `submitted_too_fast`. Example: `Form "Contact" (ID 4): submission silently dropped (reason: regex_spam), no data was processed. Data: {"name":"…","email":"…"}`
+"Without processing" means: **no email is sent (neither directly nor via the Notification Center), no data is stored in the target table and nothing is written to the session**. Every drop is written to the monolog log; with the **Log silent drop messages to the system log** checkbox it is also written to the Contao system log (back end → System-Protokoll, action `FORMS`) — including the submitted form data as JSON (uploads are recorded with their original file names). The `reason` in the entry is either `regex_spam` or `submitted_too_fast`. Example: `Form "Contact" (ID 4): submission silently dropped (reason: regex_spam), no data was processed. Data: {"name":"…","email":"…"}`
 
-Note: third-party `processFormData` hooks still run (Contao offers no way to skip them), but the core sending/storing mechanisms are safely disabled.
+Note: third-party `processFormData` hooks still run (Contao offers no way to skip them), but the core sending/storing mechanisms and the Notification Center (`nc_notification` is cleared before the hooks run) are safely disabled.
+
 
 ## How the token works
 

@@ -413,6 +413,7 @@ class FormSpamProtectionListener
      *
      * The success message/redirect is shown as normal, but no email is sent,
      * no data is stored in the database and nothing is written to the session.
+     * Notifications via the Notification Center are suppressed as well.
      *
      * The drop including the submitted form data (as JSON) is written to the
      * Contao system log (tl_log, visible in the back end) and to the monolog
@@ -423,6 +424,10 @@ class FormSpamProtectionListener
         $form->sendViaEmail = false;
         $form->storeValues = false;
         $form->storeSession = false;
+
+        // Disable Notification Center sending – its processFormData listener
+        // checks this value in the form data before sending anything
+        $form->nc_notification = 0;
 
         $message = sprintf(
             'Form "%s" (ID %s): submission silently dropped (reason: %s), no data was processed. Data: %s',
