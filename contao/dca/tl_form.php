@@ -32,6 +32,15 @@ $GLOBALS['TL_DCA']['tl_form']['fields']['minLoadTime'] = [
     ],
 ];
 
+$GLOBALS['TL_DCA']['tl_form']['fields']['silentDropTime'] = [
+    'label'     => &$GLOBALS['TL_LANG']['tl_form']['silentDropTime'],
+    'exclude'   => true,
+    'inputType' => 'select',
+    'options'   => ['', 3, 5, 10],
+    'reference' => &$GLOBALS['TL_LANG']['tl_form']['silentDropTimeReference'],
+    'eval'      => ['tl_class' => 'w50'],
+];
+
 $GLOBALS['TL_DCA']['tl_form']['fields']['enableRegexSpamProtection'] = [
     'label'     => &$GLOBALS['TL_LANG']['tl_form']['enableRegexSpamProtection'],
     'exclude'   => true,
@@ -52,15 +61,21 @@ $GLOBALS['TL_DCA']['tl_form']['fields']['enableSilentDrop'] = [
     'inputType' => 'checkbox',
 ];
 
+$GLOBALS['TL_DCA']['tl_form']['fields']['enableSilentDropSysLog'] = [
+    'label'     => &$GLOBALS['TL_LANG']['tl_form']['enableSilentDropSysLog'],
+    'exclude'   => true,
+    'inputType' => 'checkbox',
+];
+
 // --- Selector + Subpalette ---
 
 $GLOBALS['TL_DCA']['tl_form']['palettes']['__selector__'][] = 'enableTimeBasedSpamProtection';
 $GLOBALS['TL_DCA']['tl_form']['palettes']['__selector__'][] = 'enableRegexSpamProtection';
-$GLOBALS['TL_DCA']['tl_form']['subpalettes']['enableTimeBasedSpamProtection'] = 'minLoadTime';
+$GLOBALS['TL_DCA']['tl_form']['subpalettes']['enableTimeBasedSpamProtection'] = 'minLoadTime,silentDropTime';
 $GLOBALS['TL_DCA']['tl_form']['subpalettes']['enableRegexSpamProtection'] = 'regexSpamExcludeFields';
 
 // --- Append fields to end of config_legend ---
 
 PaletteManipulator::create()
-    ->addField(['enableTimeBasedSpamProtection', 'enableRegexSpamProtection', 'enableSilentDrop'], 'storeSession', PaletteManipulator::POSITION_AFTER)
+    ->addField(['enableTimeBasedSpamProtection', 'enableRegexSpamProtection', 'enableSilentDrop', 'enableSilentDropSysLog'], 'storeSession', PaletteManipulator::POSITION_AFTER)
     ->applyToPalette('default', 'tl_form');

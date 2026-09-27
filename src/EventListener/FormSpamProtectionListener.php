@@ -28,21 +28,15 @@ use Symfony\Component\HttpFoundation\RequestStack;
  * Silent drop:
  * Both checks can optionally drop a submission silently: the success
  * message is shown as normal, but no email is sent, no data is stored and
- * nothing is written to the session.
+ * nothing is written to the session. Regex matches are dropped when the
+ * "Silent Drop Regex" option is enabled, fast submissions when they are
+ * faster than the configured "Silent Drop Time".
  *
  * Advantage: Completely session-independent – works with HTTP caching,
  * AJAX and without session cookies.
  */
 class FormSpamProtectionListener
 {
-    /**
-     * Hard time floor for the silent drop (in seconds).
-     *
-     * Submissions faster than this are considered definite bot traffic and
-     * are silently dropped – independent of the configured minimum time.
-     */
-    private const SILENT_DROP_MAX_SECONDS = 3;
-
     /**
      * Maximum length of a single value in the logged form data (characters).
      */
@@ -142,7 +136,7 @@ class FormSpamProtectionListener
         // Pattern-based spam checks (do not require the token, so they also
         // work when the time-based protection is disabled)
         if ($regexProtectionEnabled && $this->matchesRegexSpam($arrSubmitted, $arrFields, $form)) {
-            if ($this->isSilentDropEnabled($form)) {
+            if ($this->isRegexSilentDropEnabled($form)) {
                 $this->suppressProcessing($form, 'regex_spam', $arrSubmitted, $arrFiles);
 
                 return;
@@ -260,16 +254,17 @@ class FormSpamProtectionListener
         // Calculate elapsed time
         $elapsed = time() - $ts;
         $minLoadTime = (int) ($form->minLoadTime ?: 5);
+        $silentDropTime = (int) ($form->silentDropTime ?: 0);
+
+        // Silent drop: submissions faster than the configured threshold are
+        // considered definite bot traffic and are dropped without feedback
+        if ($silentDropTime > 0 && $elapsed < $silentDropTime) {
+            $this->suppressProcessing($form, 'submitted_too_fast', $arrSubmitted, $arrFiles);
+
+            return;
+        }
 
         if ($elapsed < $minLoadTime) {
-            // Hard floor: submissions faster than 3 seconds are definite bot
-            // traffic – silently drop them instead of showing an error
-            if ($this->isSilentDropEnabled($form) && $elapsed < self::SILENT_DROP_MAX_SECONDS) {
-                $this->suppressProcessing($form, 'submitted_too_fast', $arrSubmitted, $arrFiles);
-
-                return;
-            }
-
             $form->addError(
                 sprintf(
                     $this->translate(
@@ -291,11 +286,19 @@ class FormSpamProtectionListener
     }
 
     /**
-     * Checks whether detected spam should be silently dropped.
+     * Checks whether regex matches should be silently dropped ("Silent Drop Regex").
      */
-    private function isSilentDropEnabled(Form $form): bool
+    private function isRegexSilentDropEnabled(Form $form): bool
     {
         return !empty($form->enableSilentDrop);
+    }
+
+    /**
+     * Checks whether silent drops should be written to the system log.
+     */
+    private function isSysLogEnabled(Form $form): bool
+    {
+        return !empty($form->enableSilentDropSysLog);
     }
 
     /**
@@ -429,10 +432,12 @@ class FormSpamProtectionListener
             $this->formatSubmittedData($arrSubmitted, $arrFiles)
         );
 
-        // Contao system log (tl_log, shown in the back end)
-        $this->systemLogger->warning($message, [
-            'contao' => new ContaoContext(__METHOD__, ContaoContext::FORMS),
-        ]);
+        // Contao system log (tl_log, shown in the back end, optional)
+        if ($this->isSysLogEnabled($form)) {
+            $this->systemLogger->warning($message, [
+                'contao' => new ContaoContext(__METHOD__, ContaoContext::FORMS),
+            ]);
+        }
 
         // Monolog file log
         $this->logger->warning($message);
