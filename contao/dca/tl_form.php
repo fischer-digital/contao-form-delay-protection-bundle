@@ -1,8 +1,6 @@
 <?php
 
 use Contao\CoreBundle\DataContainer\PaletteManipulator;
-use Contao\FormModel;
-use Contao\Input;
 
 /**
  * Extends the tl_form DCA with spam protection fields.
@@ -43,6 +41,12 @@ $GLOBALS['TL_DCA']['tl_form']['fields']['silentDropTime'] = [
     'eval'      => ['tl_class' => 'w50'],
 ];
 
+$GLOBALS['TL_DCA']['tl_form']['fields']['timeMailSysLog'] = [
+    'label'     => &$GLOBALS['TL_LANG']['tl_form']['timeMailSysLog'],
+    'exclude'   => true,
+    'inputType' => 'checkbox',
+];
+
 $GLOBALS['TL_DCA']['tl_form']['fields']['enableRegexSpamProtection'] = [
     'label'     => &$GLOBALS['TL_LANG']['tl_form']['enableRegexSpamProtection'],
     'exclude'   => true,
@@ -57,14 +61,14 @@ $GLOBALS['TL_DCA']['tl_form']['fields']['regexSpamExcludeFields'] = [
     'eval'      => ['tl_class' => 'w50', 'maxlength' => 255],
 ];
 
-$GLOBALS['TL_DCA']['tl_form']['fields']['enableSilentDrop'] = [
-    'label'     => &$GLOBALS['TL_LANG']['tl_form']['enableSilentDrop'],
+$GLOBALS['TL_DCA']['tl_form']['fields']['regexMailSysLog'] = [
+    'label'     => &$GLOBALS['TL_LANG']['tl_form']['regexMailSysLog'],
     'exclude'   => true,
     'inputType' => 'checkbox',
 ];
 
-$GLOBALS['TL_DCA']['tl_form']['fields']['enableSilentDropSysLog'] = [
-    'label'     => &$GLOBALS['TL_LANG']['tl_form']['enableSilentDropSysLog'],
+$GLOBALS['TL_DCA']['tl_form']['fields']['enableSilentDrop'] = [
+    'label'     => &$GLOBALS['TL_LANG']['tl_form']['enableSilentDrop'],
     'exclude'   => true,
     'inputType' => 'checkbox',
 ];
@@ -73,45 +77,11 @@ $GLOBALS['TL_DCA']['tl_form']['fields']['enableSilentDropSysLog'] = [
 
 $GLOBALS['TL_DCA']['tl_form']['palettes']['__selector__'][] = 'enableTimeBasedSpamProtection';
 $GLOBALS['TL_DCA']['tl_form']['palettes']['__selector__'][] = 'enableRegexSpamProtection';
-$GLOBALS['TL_DCA']['tl_form']['subpalettes']['enableTimeBasedSpamProtection'] = 'minLoadTime,silentDropTime';
-$GLOBALS['TL_DCA']['tl_form']['subpalettes']['enableRegexSpamProtection'] = 'regexSpamExcludeFields,enableSilentDrop';
+$GLOBALS['TL_DCA']['tl_form']['subpalettes']['enableTimeBasedSpamProtection'] = 'minLoadTime,silentDropTime,timeMailSysLog';
+$GLOBALS['TL_DCA']['tl_form']['subpalettes']['enableRegexSpamProtection'] = 'regexSpamExcludeFields,enableSilentDrop,regexMailSysLog';
 
 // --- Append fields to end of config_legend ---
 
 PaletteManipulator::create()
     ->addField(['enableTimeBasedSpamProtection', 'enableRegexSpamProtection'], 'storeSession', PaletteManipulator::POSITION_AFTER)
     ->applyToPalette('default', 'tl_form');
-
-// The system log checkbox is shared by both silent drop variants, so it must
-// be shown when at least one spam protection is enabled. Contao palettes
-// cannot express an "or" condition, hence the palette is adjusted dynamically
-// on load (the toggled state of submitOnChange reloads is respected).
-$GLOBALS['TL_DCA']['tl_form']['config']['onload_callback'][] = static function ($dc): void {
-    $timeEnabled = false;
-    $regexEnabled = false;
-
-    if (($id = (int) Input::get('id')) > 0 && null !== ($formModel = FormModel::findByPk($id))) {
-        $timeEnabled = !empty($formModel->enableTimeBasedSpamProtection);
-        $regexEnabled = !empty($formModel->enableRegexSpamProtection);
-    }
-
-    // Overwrite the state with the submitted values (see Contao's PaletteBuilder)
-    if ('tl_form' === (string) Input::post('FORM_SUBMIT')) {
-        $postTime = Input::post('enableTimeBasedSpamProtection');
-        $postRegex = Input::post('enableRegexSpamProtection');
-
-        if (null !== $postTime) {
-            $timeEnabled = '' !== (string) $postTime && '0' !== (string) $postTime;
-        }
-
-        if (null !== $postRegex) {
-            $regexEnabled = '' !== (string) $postRegex && '0' !== (string) $postRegex;
-        }
-    }
-
-    if ($timeEnabled || $regexEnabled) {
-        PaletteManipulator::create()
-            ->addField('enableSilentDropSysLog', 'enableRegexSpamProtection', PaletteManipulator::POSITION_AFTER)
-            ->applyToPalette('default', 'tl_form');
-    }
-};

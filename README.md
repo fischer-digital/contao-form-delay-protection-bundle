@@ -61,7 +61,7 @@ composer install
 4. Select the **Minimum time** (3, 5, 10 or 15 seconds, default: 5).
 5. Optionally enable **Enable regex spam protection** to activate the pattern checks. In its subpalette you can list **Exceptions (field names)** — a comma-separated list of form field names that are excluded from the regex checks (e.g. `message,bemerkung`) — and enable **Silent Drop Regex** to drop regex matches silently (see [Silent drop](#silent-drop)).
 6. In the time protection subpalette: **Minimum time** is the threshold that shows an **error message** to the sender. **Silent Drop Time** (disabled / <3s / <5s / <10s) is a hard time floor — faster submissions are dropped silently instead of showing an error.
-7. Optionally enable **Log silent drop messages to the system log** to record every drop in the backend system log. This checkbox is shared by both silent drop variants and only appears once at least one of the two protections is enabled.
+7. Optionally enable **Log silent drop messages to the system log** (one checkbox in each subpalette — for the regex and the time variant) to record the respective drops in the backend system log.
 
 That's it — no JavaScript, no additional configuration.
 
@@ -89,7 +89,7 @@ Silent drop shows the regular success message (or redirect) but drops the submis
 - **Silent Drop Regex** (checkbox): submissions matching one of the [spam patterns](#spam-patterns) are dropped silently instead of showing an error message.
 - **Silent Drop Time** (select, part of the time-based protection): submissions arriving faster than the selected threshold (disabled / less than 3 / 5 / 10 seconds) are dropped silently. Keep this threshold below the **Minimum time** — the minimum time is the threshold that shows an **error message** ("submitted too quickly") to the sender.
 
-"Without processing" means: **no email is sent (neither directly nor via the Notification Center), no data is stored in the target table and nothing is written to the session**. Every drop is written to the monolog log; with the **Log silent drop messages to the system log** checkbox it is also written to the Contao system log (back end → System-Protokoll, action `FORMS`) — including the submitted form data as JSON (uploads are recorded with their original file names). The `reason` in the entry is either `regex_spam` or `submitted_too_fast`. Example: `Form "Contact" (ID 4): submission silently dropped (reason: regex_spam), no data was processed. Data: {"name":"…","email":"…"}`
+"Without processing" means: **no email is sent (neither directly nor via the Notification Center), no data is stored in the target table and nothing is written to the session**. Every drop is written to the monolog log; with the **Log silent drop messages to the system log** checkbox in the corresponding subpalette (one per trigger) it is also written to the Contao system log (back end → System-Protokoll, action `FORMS`) — including the submitted form data as JSON (uploads are recorded with their original file names). The `reason` in the entry is either `regex_spam` or `submitted_too_fast`. Example: `Form "Contact" (ID 4): submission silently dropped (reason: regex_spam), no data was processed. Data: {"name":"…","email":"…"}`
 
 Note: third-party `processFormData` hooks still run (Contao offers no way to skip them), but the core sending/storing mechanisms and the Notification Center (`nc_notification` is cleared before the hooks run) are safely disabled.
 

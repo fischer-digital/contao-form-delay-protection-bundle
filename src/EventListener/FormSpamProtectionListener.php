@@ -294,14 +294,6 @@ class FormSpamProtectionListener
     }
 
     /**
-     * Checks whether silent drops should be written to the system log.
-     */
-    private function isSysLogEnabled(Form $form): bool
-    {
-        return !empty($form->enableSilentDropSysLog);
-    }
-
-    /**
      * Matches the submitted values against the spam patterns.
      *
      * 1. Consonant gibberish (5+ consecutive consonants) – single-line text
@@ -437,8 +429,13 @@ class FormSpamProtectionListener
             $this->formatSubmittedData($arrSubmitted, $arrFiles)
         );
 
-        // Contao system log (tl_log, shown in the back end, optional)
-        if ($this->isSysLogEnabled($form)) {
+        // Contao system log (tl_log, shown in the back end, optional – one
+        // option per trigger: regex spam vs. too fast submissions)
+        $sysLogEnabled = 'regex_spam' === $reason
+            ? !empty($form->regexMailSysLog)
+            : !empty($form->timeMailSysLog);
+
+        if ($sysLogEnabled) {
             $this->systemLogger->warning($message, [
                 'contao' => new ContaoContext(__METHOD__, ContaoContext::FORMS),
             ]);
