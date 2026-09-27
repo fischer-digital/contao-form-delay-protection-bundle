@@ -59,10 +59,9 @@ composer install
 2. Edit the form you want to protect.
 3. In the **Form configuration** legend, enable **Enable time-based spam protection**.
 4. Select the **Minimum time** (3, 5, 10 or 15 seconds, default: 5).
-5. Optionally enable **Enable regex spam protection** to activate the pattern checks. In its subpalette you can list **Exceptions (field names)** — a comma-separated list of form field names that are excluded from the regex checks (e.g. `message,bemerkung`).
-6. Optionally enable **Silent Drop Regex** to drop regex matches silently (see [Silent drop](#silent-drop)).
-7. In the time protection subpalette: **Minimum time** is the threshold that shows an **error message** to the sender. **Silent Drop Time** (disabled / <3s / <5s / <10s) is a hard time floor — faster submissions are dropped silently instead of showing an error.
-8. Optionally enable **Log silent drop messages to the system log** to record every drop in the backend system log.
+5. Optionally enable **Enable regex spam protection** to activate the pattern checks. In its subpalette you can list **Exceptions (field names)** — a comma-separated list of form field names that are excluded from the regex checks (e.g. `message,bemerkung`) — and enable **Silent Drop Regex** to drop regex matches silently (see [Silent drop](#silent-drop)).
+6. In the time protection subpalette: **Minimum time** is the threshold that shows an **error message** to the sender. **Silent Drop Time** (disabled / <3s / <5s / <10s) is a hard time floor — faster submissions are dropped silently instead of showing an error.
+7. Optionally enable **Log silent drop messages to the system log** to record every drop in the backend system log. This checkbox is shared by both silent drop variants and only appears once at least one of the two protections is enabled.
 
 That's it — no JavaScript, no additional configuration.
 

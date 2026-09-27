@@ -1,6 +1,8 @@
 <?php
 
 use Contao\CoreBundle\DataContainer\PaletteManipulator;
+use Contao\FormModel;
+use Contao\Input;
 
 /**
  * Extends the tl_form DCA with spam protection fields.
@@ -72,10 +74,44 @@ $GLOBALS['TL_DCA']['tl_form']['fields']['enableSilentDropSysLog'] = [
 $GLOBALS['TL_DCA']['tl_form']['palettes']['__selector__'][] = 'enableTimeBasedSpamProtection';
 $GLOBALS['TL_DCA']['tl_form']['palettes']['__selector__'][] = 'enableRegexSpamProtection';
 $GLOBALS['TL_DCA']['tl_form']['subpalettes']['enableTimeBasedSpamProtection'] = 'minLoadTime,silentDropTime';
-$GLOBALS['TL_DCA']['tl_form']['subpalettes']['enableRegexSpamProtection'] = 'regexSpamExcludeFields';
+$GLOBALS['TL_DCA']['tl_form']['subpalettes']['enableRegexSpamProtection'] = 'regexSpamExcludeFields,enableSilentDrop';
 
 // --- Append fields to end of config_legend ---
 
 PaletteManipulator::create()
-    ->addField(['enableTimeBasedSpamProtection', 'enableRegexSpamProtection', 'enableSilentDrop', 'enableSilentDropSysLog'], 'storeSession', PaletteManipulator::POSITION_AFTER)
+    ->addField(['enableTimeBasedSpamProtection', 'enableRegexSpamProtection'], 'storeSession', PaletteManipulator::POSITION_AFTER)
     ->applyToPalette('default', 'tl_form');
+
+// The system log checkbox is shared by both silent drop variants, so it must
+// be shown when at least one spam protection is enabled. Contao palettes
+// cannot express an "or" condition, hence the palette is adjusted dynamically
+// on load (the toggled state of submitOnChange reloads is respected).
+$GLOBALS['TL_DCA']['tl_form']['config']['onload_callback'][] = static function ($dc): void {
+    $timeEnabled = false;
+    $regexEnabled = false;
+
+    if (($id = (int) Input::get('id')) > 0 && null !== ($formModel = FormModel::findByPk($id))) {
+        $timeEnabled = !empty($formModel->enableTimeBasedSpamProtection);
+        $regexEnabled = !empty($formModel->enableRegexSpamProtection);
+    }
+
+    // Overwrite the state with the submitted values (see Contao's PaletteBuilder)
+    if ('tl_form' === (string) Input::post('FORM_SUBMIT')) {
+        $postTime = Input::post('enableTimeBasedSpamProtection');
+        $postRegex = Input::post('enableRegexSpamProtection');
+
+        if (null !== $postTime) {
+            $timeEnabled = '' !== (string) $postTime && '0' !== (string) $postTime;
+        }
+
+        if (null !== $postRegex) {
+            $regexEnabled = '' !== (string) $postRegex && '0' !== (string) $postRegex;
+        }
+    }
+
+    if ($timeEnabled || $regexEnabled) {
+        PaletteManipulator::create()
+            ->addField('enableSilentDropSysLog', 'enableRegexSpamProtection', PaletteManipulator::POSITION_AFTER)
+            ->applyToPalette('default', 'tl_form');
+    }
+};
