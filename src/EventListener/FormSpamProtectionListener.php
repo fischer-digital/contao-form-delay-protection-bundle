@@ -43,6 +43,19 @@ class FormSpamProtectionListener
      */
     private const SILENT_DROP_MAX_SECONDS = 3;
 
+    /**
+     * Maximum length of a single value in the logged form data (characters).
+     */
+    private const LOG_VALUE_MAX_LENGTH = 1000;
+
+    /**
+     * Maximum length of the JSON data appended to the log entry (bytes).
+     *
+     * The tl_log text column holds 65535 bytes; Contao escapes the text on
+     * write, so the limit keeps the entry safely within the column size.
+     */
+    private const LOG_DATA_MAX_LENGTH = 8000;
+
     public function __construct(
         private readonly RequestStack $requestStack,
         private readonly LoggerInterface $logger,
@@ -130,7 +143,7 @@ class FormSpamProtectionListener
         // work when the time-based protection is disabled)
         if ($regexProtectionEnabled && $this->matchesRegexSpam($arrSubmitted, $arrFields, $form)) {
             if ($this->isSilentDropEnabled($form)) {
-                $this->suppressProcessing($form, 'regex_spam');
+                $this->suppressProcessing($form, 'regex_spam', $arrSubmitted, $arrFiles);
 
                 return;
             }
@@ -252,7 +265,7 @@ class FormSpamProtectionListener
             // Hard floor: submissions faster than 3 seconds are definite bot
             // traffic – silently drop them instead of showing an error
             if ($this->isSilentDropEnabled($form) && $elapsed < self::SILENT_DROP_MAX_SECONDS) {
-                $this->suppressProcessing($form, 'submitted_too_fast');
+                $this->suppressProcessing($form, 'submitted_too_fast', $arrSubmitted, $arrFiles);
 
                 return;
             }
@@ -398,20 +411,22 @@ class FormSpamProtectionListener
      * The success message/redirect is shown as normal, but no email is sent,
      * no data is stored in the database and nothing is written to the session.
      *
-     * The drop is written to the Contao system log (tl_log, visible in the
-     * back end) and to the monolog log.
+     * The drop including the submitted form data (as JSON) is written to the
+     * Contao system log (tl_log, visible in the back end) and to the monolog
+     * log.
      */
-    private function suppressProcessing(Form $form, string $reason): void
+    private function suppressProcessing(Form $form, string $reason, array $arrSubmitted, array $arrFiles): void
     {
         $form->sendViaEmail = false;
         $form->storeValues = false;
         $form->storeSession = false;
 
         $message = sprintf(
-            'Form "%s" (ID %s): submission silently dropped (reason: %s), no data was processed.',
+            'Form "%s" (ID %s): submission silently dropped (reason: %s), no data was processed. Data: %s',
             (string) $form->title,
             (string) $form->id,
-            $reason
+            $reason,
+            $this->formatSubmittedData($arrSubmitted, $arrFiles)
         );
 
         // Contao system log (tl_log, shown in the back end)
@@ -421,6 +436,67 @@ class FormSpamProtectionListener
 
         // Monolog file log
         $this->logger->warning($message);
+    }
+
+    /**
+     * Formats the submitted form data as compact JSON for the log entry.
+     *
+     * Upload fields are represented by their original file names. Single
+     * values and the total length are capped so the log entry always fits
+     * into the tl_log text column (65535 bytes).
+     */
+    private function formatSubmittedData(array $arrSubmitted, array $arrFiles): string
+    {
+        $data = [];
+
+        foreach ($arrSubmitted as $name => $value) {
+            $data[$name] = $this->truncateValue($value);
+        }
+
+        foreach ($arrFiles as $name => $files) {
+            $files = (array) $files;
+            $names = [];
+
+            if (isset($files['name'])) {
+                // Single file upload: flat array with a "name" key
+                $names[] = (string) $files['name'];
+            } else {
+                // Multiple file upload: list of file arrays
+                foreach ($files as $file) {
+                    if (is_array($file) && isset($file['name'])) {
+                        $names[] = (string) $file['name'];
+                    }
+                }
+            }
+
+            if ([] !== $names) {
+                $data[$name] = implode(', ', $names);
+            }
+        }
+
+        $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+
+        if (!is_string($json) || '' === $json) {
+            return '[data not encodable]';
+        }
+
+        if (strlen($json) > self::LOG_DATA_MAX_LENGTH) {
+            return mb_substr($json, 0, self::LOG_DATA_MAX_LENGTH) . '…';
+        }
+
+        return $json;
+    }
+
+    /**
+     * Truncates overly long string values for the log entry.
+     */
+    private function truncateValue(mixed $value): mixed
+    {
+        if (is_string($value) && strlen($value) > self::LOG_VALUE_MAX_LENGTH) {
+            return mb_substr($value, 0, self::LOG_VALUE_MAX_LENGTH) . '…';
+        }
+
+        return $value;
     }
 
     /**
