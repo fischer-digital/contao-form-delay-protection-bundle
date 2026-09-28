@@ -7,6 +7,7 @@ namespace Tbo\FormDelayProtection\EventListener;
 use Contao\CoreBundle\DependencyInjection\Attribute\AsHook;
 use Contao\CoreBundle\Monolog\ContaoContext;
 use Contao\Form;
+use Contao\FormFieldModel;
 use Contao\System;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -34,6 +35,11 @@ use Symfony\Component\HttpFoundation\RequestStack;
  *
  * Advantage: Completely session-independent – works with HTTP caching,
  * AJAX and without session cookies.
+ *
+ * Multi-page forms (e.g. terminal42/contao-mp_forms): the checks run only
+ * on the final submission – switching between pages never triggers them.
+ * The hook is registered with a lower priority so multi-page extensions can
+ * abort the hook chain for intermediate steps first.
  */
 class FormSpamProtectionListener
 {
@@ -88,6 +94,12 @@ class FormSpamProtectionListener
 
         // Always inject the token – even on POST, so the AJAX re-render
         // contains a fresh token for subsequent submission attempts.
+        // Inject it only once per render (multi-page form extensions may
+        // trigger this hook more than once per request).
+        if (str_contains((string) $form->Template->hidden, '_form_load_token')) {
+            return $arrFields;
+        }
+
         $timestamp = (string) time();
         $hmac = $this->generateHmac($timestamp, $formId);
 
@@ -109,7 +121,12 @@ class FormSpamProtectionListener
      *
      * Runs BEFORE the actual data processing (email, database).
      */
-    #[AsHook('prepareFormData')]
+    /**
+     * Runs with a lower priority so multi-page form extensions (e.g.
+     * terminal42/contao-mp_forms) can abort the hook chain for intermediate
+     * steps first – our checks then only run on the final submission.
+     */
+    #[AsHook('prepareFormData', priority: -100)]
     public function onPrepareFormData(
         array &$arrSubmitted,
         array $arrLabels,
@@ -311,13 +328,14 @@ class FormSpamProtectionListener
     private function matchesRegexSpam(array $arrSubmitted, array $arrFields, Form $form): bool
     {
         $excludedFields = $this->getRegexExcludedFields($form);
+        $fieldTypes = $this->getFieldTypes($form, $arrFields);
 
         foreach ($arrSubmitted as $name => $value) {
             if (in_array(strtolower((string) $name), $excludedFields, true)) {
                 continue;
             }
 
-            $type = $arrFields[$name]->type ?? null;
+            $type = $fieldTypes[$name] ?? null;
 
             foreach ($this->flattenValues($value) as $string) {
                 // 1. Consonant gibberish (e.g. "xjkrtw") - single-line text fields
@@ -363,6 +381,34 @@ class FormSpamProtectionListener
         }
 
         return is_string($value) && '' !== $value ? [$value] : [];
+    }
+
+    /**
+     * Returns the field types by field name.
+     *
+     * On multi-page forms the $arrFields array only contains the fields of
+     * the current step, so missing field types are resolved from the complete
+     * set of form fields.
+     */
+    private function getFieldTypes(Form $form, array $arrFields): array
+    {
+        $types = [];
+
+        foreach ($arrFields as $name => $field) {
+            if (is_string($name)) {
+                $types[$name] = $field->type ?? null;
+            }
+        }
+
+        if (null !== ($formFields = FormFieldModel::findPublishedByPid((int) $form->id))) {
+            foreach ($formFields as $field) {
+                if ($field->name && !isset($types[$field->name])) {
+                    $types[$field->name] = $field->type;
+                }
+            }
+        }
+
+        return $types;
     }
 
     /**

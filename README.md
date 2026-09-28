@@ -115,7 +115,16 @@ This bundle works alongside other spam protection methods:
 
 - Contao's built-in **security question** and **honeypot**
 - [ALTCHA](https://altcha.org) (antispam widget)
+- [terminal42/contao-mp_forms](https://github.com/terminal42/contao-mp_forms) (multi-page forms)
 - Any other form validation
+
+## Multi-page forms (terminal42/contao-mp_forms)
+
+The protection works together with [terminal42/contao-mp_forms](https://github.com/terminal42/contao-mp_forms):
+
+- None of the checks run when switching between the form pages — they only run on the final submission.
+- The regex checks see the submitted data of **all** steps at once.
+- The time-based checks measure from loading the **last** page until submission. On summary-style final pages without input fields, keep the silent drop time disabled or choose a small minimum time to avoid false positives.
 
 ## Upgrading from 0.9.x (BC break)
 
